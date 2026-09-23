@@ -9,7 +9,8 @@
  * @module @deepseek-ai/dsh-host-directory-picker-browse
  */
 
-import { mkdir, opendir, stat } from 'node:fs/promises'
+import { mkdir, opendir, rm, stat } from 'node:fs/promises'
+import { spawn } from 'node:child_process'
 import { homedir } from 'node:os'
 import { basename, dirname, join, posix, resolve, win32 } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -18,8 +19,9 @@ import {
   DirectoryPicker, DirectoryPickerError,
 } from '@deepseek-ai/dsh-host-directory-picker'
 import type {
-  DirectoryEntry, DirectoryListing, DirectoryPickerCapability,
+  DirectoryEntry, DirectoryListing, DirectoryPickerCapability, GithubRepositorySearchResult,
 } from '@deepseek-ai/dsh-host-directory-picker'
+
 
 /**
  * Ancestor chain from the filesystem root to `target` inclusive — the
@@ -200,7 +202,10 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
     kind: 'browse',
     list: (path, signal) => this.list(path, signal),
     createDirectory: (path, name) => this.createDirectory(path, name),
+    cloneGit: (url, basePath, name) => this.cloneGit(url, basePath, name),
+    searchGithub: query => this.searchGithub(query),
   }
+
 
   constructor(ctx: Context, private readonly config: Config) {
     super(ctx)
@@ -319,6 +324,150 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
         throw new DirectoryPickerError('directory-exists', target, `${target} already exists`)
       }
       throw new DirectoryPickerError('directory-create-failed', target, `cannot create ${target}: ${messageOf(error)}`)
+    }
+  }
+
+  private async cloneGit(rawUrl: string, rawBasePath: string, customName?: string): Promise<string> {
+    const basePath = rawBasePath.trim()
+    if (!basePath) {
+      throw new DirectoryPickerError('directory-create-failed', basePath, 'Missing clone destination directory')
+    }
+    if (!fullyQualified(basePath)) {
+      throw new DirectoryPickerError('directory-create-failed', basePath, `cannot clone under "${basePath}": not a fully qualified destination path`)
+    }
+    const normalizedBasePath = resolve(basePath)
+    try {
+      const dirStat = await stat(normalizedBasePath)
+      if (!dirStat.isDirectory()) {
+        throw new DirectoryPickerError('directory-create-failed', normalizedBasePath, `destination "${normalizedBasePath}" is not a directory`)
+      }
+    } catch {
+      throw new DirectoryPickerError('directory-create-failed', normalizedBasePath, `destination folder "${normalizedBasePath}" does not exist`)
+    }
+
+    const trimmedUrl = rawUrl.trim()
+    if (!trimmedUrl) {
+      throw new DirectoryPickerError('directory-create-failed', normalizedBasePath, 'Missing Git repository URL')
+    }
+
+    let repoName = ''
+    if (customName && customName.trim()) {
+      repoName = customName.trim()
+    } else {
+      const match = trimmedUrl.match(/(?:[:/])([A-Za-z0-9_.-]+?)(?:\.git)?$/u)
+      if (match && match[1]) {
+        repoName = match[1]
+      } else {
+        throw new DirectoryPickerError('directory-create-failed', normalizedBasePath, 'Cannot extract repository name from URL')
+      }
+    }
+
+    if (/[/\\]/.test(repoName) || repoName === '.' || repoName === '..') {
+      throw new DirectoryPickerError('directory-create-failed', join(normalizedBasePath, repoName), `"${repoName}" is not a valid folder name`)
+    }
+
+    const targetPath = join(normalizedBasePath, repoName)
+    try {
+      await stat(targetPath)
+      throw new DirectoryPickerError('directory-exists', targetPath, `Destination folder already exists: ${targetPath}`)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+    }
+
+    await new Promise<void>((resolvePromise, rejectPromise) => {
+      const child = spawn('git', ['clone', trimmedUrl, targetPath], {
+        cwd: normalizedBasePath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      let stderr = ''
+      child.stderr?.on('data', (chunk) => {
+        stderr += chunk.toString()
+      })
+      const timeout = setTimeout(() => {
+        child.kill('SIGTERM')
+        rejectPromise(new DirectoryPickerError('directory-create-failed', targetPath, 'Git clone timed out after 5 minutes'))
+      }, 5 * 60_000)
+
+      child.on('error', (err) => {
+        clearTimeout(timeout)
+        rejectPromise(new DirectoryPickerError('directory-create-failed', targetPath, `Failed to execute git: ${err.message}`))
+      })
+      child.on('close', (code) => {
+        clearTimeout(timeout)
+        if (code === 0) {
+          resolvePromise()
+        } else {
+          const detail = stderr.trim() || `git clone exited with code ${code}`
+          rejectPromise(new DirectoryPickerError('directory-create-failed', targetPath, `Git clone failed: ${detail}`))
+        }
+      })
+    }).catch(async (error) => {
+      await rm(targetPath, { recursive: true, force: true }).catch(() => undefined)
+      throw error
+    })
+
+    return targetPath
+  }
+
+  private async searchGithub(rawQuery: string): Promise<GithubRepositorySearchResult[]> {
+    const query = rawQuery.trim()
+    if (query.length < 2) return []
+
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'deepseek-harness-github-search',
+    }
+    const token = process.env.GITHUB_TOKEN?.trim() || process.env.GH_TOKEN?.trim()
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+
+    const normalizeResult = (item: unknown): GithubRepositorySearchResult | null => {
+      if (!item || typeof item !== 'object') return null
+      const obj = item as Record<string, unknown>
+      const fullName = typeof obj.full_name === 'string' ? obj.full_name : ''
+      if (!fullName) return null
+      return {
+        fullName,
+        description: typeof obj.description === 'string' ? obj.description : null,
+        stars: typeof obj.stargazers_count === 'number' ? obj.stargazers_count : 0,
+        language: typeof obj.language === 'string' ? obj.language : null,
+        cloneUrl: typeof obj.clone_url === 'string' ? obj.clone_url : `https://github.com/${fullName}.git`,
+        htmlUrl: typeof obj.html_url === 'string' ? obj.html_url : `https://github.com/${fullName}`,
+        isPrivate: Boolean(obj.private),
+      }
+    }
+
+    const exactMatch = query.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+?)(?:\.git)?$/u)
+    if (exactMatch && exactMatch[1] && exactMatch[2]) {
+      try {
+        const exactRes = await fetch(`https://api.github.com/repos/${encodeURIComponent(exactMatch[1])}/${encodeURIComponent(exactMatch[2])}`, {
+          headers,
+          signal: AbortSignal.timeout(8_000),
+        })
+        if (exactRes.ok) {
+          const item = await exactRes.json()
+          const result = normalizeResult(item)
+          if (result) return [result]
+        }
+      } catch {
+        // Fall back to query search
+      }
+    }
+
+    try {
+      const searchRes = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(query)}&per_page=10`, {
+        headers,
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (!searchRes.ok) return []
+      const data = await searchRes.json() as { items?: unknown[] }
+      if (Array.isArray(data.items)) {
+        return data.items.map(normalizeResult).filter((r): r is GithubRepositorySearchResult => r !== null)
+      }
+      return []
+    } catch {
+      return []
     }
   }
 }

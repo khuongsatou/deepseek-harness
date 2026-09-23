@@ -12,9 +12,9 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import type { DirectoryListing } from './types.ts'
+import type { DirectoryListing, GithubRepositorySearchResult } from './types.ts'
 
-export type { DirectoryEntry, DirectoryListing } from './types.ts'
+export type { DirectoryEntry, DirectoryListing, GithubRepositorySearchResult } from './types.ts'
 
 /** The native interaction: one OS directory chooser on the host display. */
 export interface DirectoryPickerNativeCapability {
@@ -56,7 +56,22 @@ export interface DirectoryPickerBrowseCapability {
    * `directory-create-failed` for a parent that is not fully qualified or any other failure.
    */
   createDirectory(path: string, name: string): Promise<string>
+  /**
+   * Clone a Git repository into a destination parent directory.
+   * @param url - repository Git/GitHub clone URL.
+   * @param basePath - parent directory to clone into.
+   * @param name - optional custom folder name (defaults to repository name).
+   * @returns absolute path of the cloned repository.
+   */
+  cloneGit?(url: string, basePath: string, name?: string): Promise<string>
+  /**
+   * Search GitHub repositories by query or keywords.
+   * @param query - search query string or owner/repo.
+   * @returns matching repository results.
+   */
+  searchGithub?(query: string): Promise<GithubRepositorySearchResult[]>
 }
+
 
 /**
  * Merge-extensible registry of interaction shapes keyed by capability kind: a

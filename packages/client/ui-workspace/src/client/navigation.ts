@@ -2,6 +2,7 @@
 
 import { Service, type Context } from '@deepseek-ai/cordis'
 import type { ClientRemote, DirectoryListing, RemoteFailure } from '@deepseek-ai/dsh-api-remotes/client'
+import type { GithubRepositorySearchResult } from '@deepseek-ai/dsh-host-directory-picker/types'
 import type {
   ISessions,
   SessionCreateError,
@@ -104,7 +105,22 @@ export interface UiWorkspace {
    * @returns created absolute path.
    */
   createDirectory(path: string, name: string): Promise<string>
+  /**
+   * Clone a Git repository.
+   * @param url - repository URL.
+   * @param basePath - parent destination directory.
+   * @param name - optional custom folder name.
+   * @returns absolute cloned path.
+   */
+  cloneGit(url: string, basePath: string, name?: string): Promise<string>
+  /**
+   * Search GitHub repositories.
+   * @param query - search query.
+   * @returns list of matching repositories.
+   */
+  searchGithub(query: string): Promise<GithubRepositorySearchResult[]>
 }
+
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -280,6 +296,37 @@ class UiWorkspaceService extends Service implements UiWorkspace {
     if (!result.ok) throw new DirectoryBrowseError(result.error)
     return result.value
   }
+
+  async cloneGit(url: string, basePath: string, name?: string): Promise<string> {
+    const picker = this.directoryPicker as unknown as {
+      cloneGit?: (
+        url: string,
+        basePath: string,
+        name?: string,
+      ) => Promise<{ ok: true; value: string } | { ok: false; error: RemoteFailure }>
+    }
+    if (typeof picker.cloneGit !== 'function') {
+      throw new Error('Host does not support cloneGit')
+    }
+    const result = await picker.cloneGit(url, basePath, name)
+    if (!result.ok) throw new DirectoryBrowseError(result.error)
+    return result.value
+  }
+
+  async searchGithub(query: string): Promise<GithubRepositorySearchResult[]> {
+    const picker = this.directoryPicker as unknown as {
+      searchGithub?: (
+        query: string,
+      ) => Promise<{ ok: true; value: GithubRepositorySearchResult[] } | { ok: false; error: RemoteFailure }>
+    }
+    if (typeof picker.searchGithub !== 'function') {
+      return []
+    }
+    const result = await picker.searchGithub(query)
+    if (!result.ok) throw new DirectoryBrowseError(result.error)
+    return result.value
+  }
+
 
   private watchNavigation(): () => void {
     let initial: 'waiting' | 'connecting' | 'done' = 'waiting'

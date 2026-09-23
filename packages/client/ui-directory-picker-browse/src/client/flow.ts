@@ -6,6 +6,7 @@
 import { createElement } from 'react'
 import type { ReactElement } from 'react'
 import type { DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import type { GithubRepositorySearchResult } from '@deepseek-ai/dsh-host-directory-picker/types'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: the owner contract of the directory-flow holes.
 import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
@@ -17,6 +18,11 @@ export interface BrowseFlowInjected {
   listDirectory: (path?: string, signal?: AbortSignal) => Promise<DirectoryListing>
   /** Create one child directory under an existing parent. */
   createDirectory: (path: string, name: string) => Promise<string>
+  /** Clone a Git repository. */
+  cloneGit?: ((url: string, basePath: string, name?: string) => Promise<string>) | undefined
+  /** Search GitHub repositories. */
+  searchGithub?: ((query: string) => Promise<GithubRepositorySearchResult[]>) | undefined
+
   /** Localized dialog copy (this package's namespace). */
   t: Translate
 }
@@ -36,6 +42,8 @@ export function BrowseDirectoryFlow(props: DirectoryFlowOwnerProps & BrowseFlowI
     busy: props.busy,
     listDirectory: props.listDirectory,
     createDirectory: props.createDirectory,
+    cloneGit: props.cloneGit,
+    searchGithub: props.searchGithub,
     t: props.t,
     onOpen: props.onPicked,
     onClose: props.onCancel,

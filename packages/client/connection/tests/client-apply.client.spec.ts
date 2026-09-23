@@ -15,13 +15,15 @@ import {
 } from '../src/client/index.ts'
 
 type Win = {
-  location?: { hostname: string; origin?: string }
+  location?: { hostname: string; host?: string; origin?: string }
   __DSH_TRANSPORT__?: ClientTransportHooks
+  __DSH_TRUSTED_HOSTS__?: unknown
 }
 
 afterEach(() => {
   delete (globalThis as Win).location
   delete (globalThis as Win).__DSH_TRANSPORT__
+  delete (globalThis as Win).__DSH_TRUSTED_HOSTS__
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
@@ -133,6 +135,21 @@ describe('connection client apply', () => {
     ;(globalThis as Win).location = { hostname: '192.0.2.20' }
     expect((await mount()).isLoopback).toBe(false)
   })
+
+  it('identifies a trusted non-loopback page through __DSH_TRUSTED_HOSTS__', async () => {
+    ;(globalThis as Win).location = { hostname: 'dp.1nutnhan.com', host: 'dp.1nutnhan.com' }
+    ;(globalThis as Win).__DSH_TRUSTED_HOSTS__ = ['dp.1nutnhan.com']
+    const handle = await mount()
+    expect(handle.isLoopback).toBe(true)
+  })
+
+  it('keeps untrusted remote page as non-loopback even when __DSH_TRUSTED_HOSTS__ is present', async () => {
+    ;(globalThis as Win).location = { hostname: '198.51.100.7' }
+    ;(globalThis as Win).__DSH_TRUSTED_HOSTS__ = ['dp.1nutnhan.com']
+    const handle = await mount()
+    expect(handle.isLoopback).toBe(false)
+  })
+
 
   it('requires one generation source and ignores a stale source disposer', async () => {
     ;(globalThis as Win).location = { hostname: 'localhost' }

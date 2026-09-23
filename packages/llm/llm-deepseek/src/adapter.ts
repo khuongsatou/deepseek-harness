@@ -1,5 +1,6 @@
 /** Direct Messages transport with one cancellable lifecycle per model request. */
 
+import { randomUUID } from 'node:crypto'
 import { attributionHeaders, LlmAdapter, LlmError } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, ImageAttachmentAccessResolver, PreparedAdapterCall, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { DeepSeekLlmApiJson } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
@@ -119,6 +120,9 @@ export class DeepSeekAdapter extends LlmAdapter {
           'anthropic-version': '2023-06-01',
           ...fileIds === undefined || fileIds.size === 0 ? {} : { 'anthropic-beta': MESSAGES_FILES_BETA },
           'x-deepseek-harness-user-id': this.dependencies.resolveUserId(),
+          ...connection.baseURL.toLowerCase().includes('opencode.ai') ? {
+            'x-opencode-session': options.sessionId !== undefined ? String(options.sessionId) : randomUUID(),
+          } : {},
           ...options.sessionId === undefined ? {} : { 'x-deepseek-harness-session-id': String(options.sessionId) },
           ...options.purpose === 'compaction' ? { 'x-deepseek-harness-compact': '1' } : {},
         },

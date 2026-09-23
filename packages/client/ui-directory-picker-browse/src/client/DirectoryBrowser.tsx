@@ -41,7 +41,9 @@ import {
   IconPlusOutlineRegular, Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import type { GithubRepositorySearchResult } from '@deepseek-ai/dsh-host-directory-picker/types'
 import type { Translate } from '@deepseek-ai/dsh-client-locale/client'
+import { ProjectSetupModal } from './ProjectSetupModal.tsx'
 import css from './DirectoryBrowser.module.css'
 
 /** Owner-supplied browser props: browse calls, pick semantics, and copy. */
@@ -61,6 +63,11 @@ export interface DirectoryBrowserProps {
    * business message over the ordinary Error text.
    */
   createDirectory: (path: string, name: string) => Promise<string>
+  /** Clone a Git repository. */
+  cloneGit?: ((url: string, basePath: string, name?: string) => Promise<string>) | undefined
+  /** Search GitHub repositories. */
+  searchGithub?: ((query: string) => Promise<GithubRepositorySearchResult[]>) | undefined
+
   /** The operator confirmed a directory (the selection, else the listed level). */
   onOpen: (path: string) => void
   /** Close without picking (mask, Escape, Cancel). */
@@ -70,6 +77,7 @@ export interface DirectoryBrowserProps {
   /** Localized copy. */
   t: Translate
 }
+
 
 /** Failure text from the injected directory operation. */
 function failureText(error: unknown): string {
@@ -270,12 +278,16 @@ function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPr
  * @param props - owner-controlled browser props.
  * @returns the dialog element (null while closed, via Modal).
  */
-export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen, onClose, busy, t }: DirectoryBrowserProps) {
+export function DirectoryBrowser({
+  open, listDirectory, createDirectory, cloneGit, searchGithub, onOpen, onClose, busy, t,
+}: DirectoryBrowserProps) {
   // Miller state: the listed level, the selected row in it, and the selected
   // folder's own listing (the right column; null while nothing is selected).
   const [parent, setParent] = useState<DirectoryListing | null>(null)
   const [selected, setSelected] = useState<DirectoryEntry | null>(null)
   const [child, setChild] = useState<DirectoryListing | null>(null)
+  const [setupModal, setSetupModal] = useState<{ open: boolean; mode: 'create' | 'clone' }>({ open: false, mode: 'create' })
+
   const [loading, setLoading] = useState(false)
   // Derived from `loading` and `scanWindow` by the slow-scan effect below:
   // true only once the current listing call has been in flight for
@@ -753,7 +765,8 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
   // The nested create dialog owns the interaction while open: Modal has no
   // focus trap, so every parent control goes inert (Shift-Tab or AT must not
   // close, adopt, or retarget underneath the child).
-  const parentInert = busy || folderDraft !== null
+  const parentInert = busy || folderDraft !== null || setupModal.open
+
   // An uncommitted path draft makes targetPath stale relative to the header:
   // committing actions must not act on the previous selection/listing while
   // a different path is displayed.
@@ -973,6 +986,16 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
           >
             {t('browser.newFolder')}
           </Button>
+          <Button
+            variant="outline"
+            disabled={parent === null || loading || parentInert || draftPending}
+            onClick={() => {
+              setSetupModal({ open: true, mode: 'clone' })
+            }}
+          >
+            {t('browser.cloneGit') || 'Clone from GitHub'}
+          </Button>
+
           <button
             type="button"
             className={clsx(css.showHiddenToggle, showHidden && css.showHiddenToggleActive)}
@@ -1047,6 +1070,21 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
           </div>
         </div>
       </Modal>
+      <ProjectSetupModal
+        open={setupModal.open}
+        initialMode={setupModal.mode}
+        basePath={targetPath ?? parent?.path ?? ''}
+        onClose={() => setSetupModal({ open: false, mode: 'create' })}
+        onSuccess={(createdOrClonedPath) => {
+          setSetupModal({ open: false, mode: 'create' })
+          onOpen(createdOrClonedPath)
+        }}
+        createDirectory={createDirectory}
+        cloneGit={cloneGit}
+        searchGithub={searchGithub}
+        t={t}
+      />
     </Modal>
+
   )
 }

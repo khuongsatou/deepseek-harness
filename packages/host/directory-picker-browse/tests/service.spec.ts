@@ -228,4 +228,27 @@ describe('BrowseDirectoryPicker', () => {
     const missingParent = await capability.createDirectory(join(root, 'no-such-dir'), 'child').catch((error: unknown) => error)
     expect((missingParent as DirectoryPickerError).code).toBe('directory-create-failed')
   })
+
+  it('validates cloneGit arguments and executes git clone or reports error', async () => {
+    // Missing URL
+    const errMissingUrl = await capability.cloneGit?.('', root).catch((e: unknown) => e)
+    expect(errMissingUrl).toBeInstanceOf(DirectoryPickerError)
+    expect((errMissingUrl as DirectoryPickerError).code).toBe('directory-create-failed')
+
+    // Invalid destination
+    const errMissingDest = await capability.cloneGit?.('https://github.com/foo/bar.git', join(root, 'missing')).catch((e: unknown) => e)
+    expect(errMissingDest).toBeInstanceOf(DirectoryPickerError)
+    expect((errMissingDest as DirectoryPickerError).code).toBe('directory-create-failed')
+
+    // Destination already exists
+    const errExists = await capability.cloneGit?.('https://github.com/foo/projects.git', root).catch((e: unknown) => e)
+    expect(errExists).toBeInstanceOf(DirectoryPickerError)
+    expect((errExists as DirectoryPickerError).code).toBe('directory-exists')
+  })
+
+  it('searches github with query', async () => {
+    // Short query returns empty
+    const shortRes = await capability.searchGithub?.('a')
+    expect(shortRes).toEqual([])
+  })
 })

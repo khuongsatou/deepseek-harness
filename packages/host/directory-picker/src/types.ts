@@ -37,3 +37,21 @@ export interface DirectoryListing {
    */
   truncated: boolean
 }
+
+/** One repository result from searching GitHub. */
+export interface GithubRepositorySearchResult {
+  /** Full name e.g. "owner/repo". */
+  fullName: string
+  /** Brief description from GitHub. */
+  description: string | null
+  /** Number of stargazers. */
+  stars: number
+  /** Primary programming language. */
+  language: string | null
+  /** Clone URL e.g. "https://github.com/owner/repo.git". */
+  cloneUrl: string
+  /** Web page URL e.g. "https://github.com/owner/repo". */
+  htmlUrl: string
+  /** Whether the repository is private. */
+  isPrivate: boolean
+}

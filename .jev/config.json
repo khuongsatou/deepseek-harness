@@ -1,0 +1,12 @@
+{
+  "enabled": true,
+  "mode": "shadow",
+  "bypass": false,
+  "jev_dir": "external/jev-ultrafast",
+  "log_path": ".jev/logs/router.jsonl",
+  "require_human_confirmation_for_irreversible": true,
+  "confidence_threshold": 0.75,
+  "endpoints": {
+    "jev_service_url": "http://127.0.0.1:8766"
+  }
+}

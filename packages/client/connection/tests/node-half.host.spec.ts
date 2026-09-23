@@ -214,6 +214,23 @@ describe('connection node half', () => {
     }
   })
 
+  it('injects declared trustedHosts and withdraws them on disposal', async () => {
+    const { ctx, dispose } = await mounted({ trustedHosts: ['dp.1nutnhan.com'] })
+    try {
+      const rows: IndexInjection[] = []
+      ctx.emit('webserver/index-inject', rows)
+      expect(rows).toContainEqual({
+        kind: 'global', name: '__DSH_TRUSTED_HOSTS__', value: ['dp.1nutnhan.com'],
+      })
+      await dispose()
+      const after: IndexInjection[] = []
+      ctx.emit('webserver/index-inject', after)
+      expect(after).toEqual([])
+    } finally {
+      await dispose()
+    }
+  })
+
   it.each([
     { recovery: { backoffBaseMs: 0 }, error: /backoffBaseMs/ },
     { recovery: { backoffFactor: NaN }, error: /backoffFactor.*finite/ },

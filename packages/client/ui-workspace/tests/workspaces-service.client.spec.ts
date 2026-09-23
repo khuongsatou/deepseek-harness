@@ -11,7 +11,9 @@ import type {
   IWorkspaces, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { ClientRemote, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import type { GithubRepositorySearchResult } from '@deepseek-ai/dsh-host-directory-picker/types'
 import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
+
 import type { RemoteResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { LayoutController } from '@deepseek-ai/dsh-client-ui-layout/client'
@@ -247,13 +249,22 @@ class FakeDirectoryPicker {
   onList: () => Promise<RemoteResult<DirectoryListing>> = () => Promise.resolve({ ok: true, value: listing })
   onCreateDirectory: () => Promise<RemoteResult<string>> =
     () => Promise.resolve({ ok: true, value: '/home/u/new' })
+  onCloneGit: () => Promise<RemoteResult<string>> =
+    () => Promise.resolve({ ok: true, value: '/home/u/cloned' })
+  onSearchGithub: () => Promise<RemoteResult<GithubRepositorySearchResult[]>> =
+    () => Promise.resolve({ ok: true, value: [] })
 
   readonly remote: ClientRemote['directoryPicker'] = {
     pick: () => this.record('pick', {}, this.onPick()),
     list: (path?: string) => this.record('list', { path }, this.onList()),
     createDirectory: (path: string, name: string) =>
       this.record('createDirectory', { path, name }, this.onCreateDirectory()),
+    cloneGit: (url: string, basePath: string, name?: string) =>
+      this.record('cloneGit', { url, basePath, name }, this.onCloneGit()),
+    searchGithub: (query: string) =>
+      this.record('searchGithub', { query }, this.onSearchGithub()),
   }
+
 
   callsOf(method: string): unknown[] {
     return this.calls.filter(call => call.method === method).map(call => call.payload)

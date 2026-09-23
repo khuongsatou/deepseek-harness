@@ -49,6 +49,20 @@ export function apply(ctx: ClientContext): void {
         'browser.loading': '加载中…',
         'browser.truncated': '文件夹过多，仅显示开头部分。',
         'browser.showHidden': '显示隐藏文件',
+        'browser.newProject': '新建项目',
+        'browser.cloneGit': '从 GitHub 克隆',
+        'browser.createOrClone': '创建或克隆项目',
+        'browser.destination': '目标文件夹',
+        'browser.projectName': '项目名称',
+        'browser.searchGithub': '搜索 GitHub',
+        'browser.searchPlaceholder': 'owner/repo 或关键字',
+        'browser.searching': '正在搜索 GitHub…',
+        'browser.searchButton': '搜索',
+        'browser.noRepos': '未找到仓库。',
+        'browser.repoUrl': 'GitHub 仓库 URL',
+        'browser.cloning': '正在克隆…',
+        'browser.createProjectAction': '创建并打开项目',
+        'browser.cloneProjectAction': '克隆并打开项目',
       }],
       ['en', {
         'browser.title': 'Select Workspace Directory',
@@ -64,6 +78,20 @@ export function apply(ctx: ClientContext): void {
         'browser.loading': 'Loading…',
         'browser.truncated': 'Too many folders to list; only the beginning is shown.',
         'browser.showHidden': 'Show hidden files',
+        'browser.newProject': 'New project',
+        'browser.cloneGit': 'Clone from GitHub',
+        'browser.createOrClone': 'Create or clone project',
+        'browser.destination': 'Destination folder',
+        'browser.projectName': 'Project name',
+        'browser.searchGithub': 'Search GitHub',
+        'browser.searchPlaceholder': 'owner/repo or keywords',
+        'browser.searching': 'Searching GitHub…',
+        'browser.searchButton': 'Search',
+        'browser.noRepos': 'No repositories found.',
+        'browser.repoUrl': 'GitHub repository URL',
+        'browser.cloning': 'Cloning…',
+        'browser.createProjectAction': 'Create Project',
+        'browser.cloneProjectAction': 'Clone Project',
       }],
     ]
     try {
@@ -78,8 +106,11 @@ export function apply(ctx: ClientContext): void {
   const injected = (): BrowseFlowInjected => ({
     listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
     createDirectory: (path, name) => ctx.uiWorkspace.createDirectory(path, name),
+    cloneGit: (url, basePath, name) => ctx.uiWorkspace.cloneGit(url, basePath, name),
+    searchGithub: query => ctx.uiWorkspace.searchGithub(query),
     t: ctx.locale.bind(LOCALE_NS),
   })
+
   // Both declaration lifetimes must be live before the pair installs; the
   // generator makes the two registrations one transactional effect. The
   // outer/inner nesting order is arbitrary; neither hole has precedence.

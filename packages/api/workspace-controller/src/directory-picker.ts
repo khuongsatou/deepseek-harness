@@ -11,7 +11,7 @@ import type {
 } from '@deepseek-ai/dsh-host-directory-picker'
 // The seam owns the listing declaration; the generator requires the reference
 // site to name that package rather than this package's re-export of it.
-import type { DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
+import type { DirectoryListing, GithubRepositorySearchResult } from '@deepseek-ai/dsh-host-directory-picker/types'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { RemoteErrorCode } from '@deepseek-ai/dsh-typert-protocol'
 
@@ -101,6 +101,46 @@ export class DirectoryPickerController extends TypertRemoteService {
       throw browseFailure(error)
     }
   }
+
+  /**
+   * Clone a Git repository for a Remote caller's in-app browser.
+   * @param url - Git/GitHub clone URL.
+   * @param basePath - absolute parent directory.
+   * @param name - optional custom folder name.
+   * @returns the cloned directory's absolute path.
+   */
+  @Remote('cloneGit')
+  async cloneGit(url: string, basePath: string, name?: string): Promise<string> {
+    const capability = this.requireCapability('browse', 'cloneGit')
+    if (typeof capability.cloneGit !== 'function') {
+      throw new RemoteError('directory-picker/unavailable', 'composed browse backend does not support cloneGit', { capability: capability.kind })
+    }
+    try {
+      return await capability.cloneGit(url, basePath, name)
+    } catch (error: unknown) {
+      throw browseFailure(error)
+    }
+  }
+
+  /**
+   * Search GitHub repositories for a Remote caller.
+   * @param query - search query string.
+   * @returns matching repository results.
+   */
+  @Remote('searchGithub')
+  async searchGithub(query: string): Promise<GithubRepositorySearchResult[]> {
+    const capability = this.requireCapability('browse', 'searchGithub')
+    if (typeof capability.searchGithub !== 'function') {
+      throw new RemoteError('directory-picker/unavailable', 'composed browse backend does not support searchGithub', { capability: capability.kind })
+    }
+    try {
+      return await capability.searchGithub(query)
+    } catch (error: unknown) {
+      throw browseFailure(error)
+    }
+  }
+
+
 
   /** Resolve the capability one wire verb needs, or refuse with the kind this backend serves. */
   private requireCapability<Kind extends keyof DirectoryPickerCapabilities>(
